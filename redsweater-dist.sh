@@ -1,8 +1,17 @@
 #!/bin/bash
 set -euo pipefail
 
+# Configure TipTap modules to include
+# Format: "package-path:export-name"
+TIPTAP_MODULES=(
+  "core:Editor"
+  "starter-kit:StarterKit"
+  "extension-text-style:TextStyle"
+)
+
 # Set absolute paths
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+BUILT_PRODUCTS_DIR="${BUILT_PRODUCTS_DIR:-$SCRIPT_DIR/build}"
 TIPTAP_DIR="$SCRIPT_DIR/tiptap"
 VITE_TEMP_DIR="$SCRIPT_DIR/vite-tiptap-bundle"
 OUTPUT_DIR="$BUILT_PRODUCTS_DIR/tiptap"
@@ -20,7 +29,14 @@ fi
 echo "Building Tiptap packages..."
 cd "$TIPTAP_DIR"
 npx pnpm install
-npx pnpm build --filter=@tiptap/core --filter=@tiptap/starter-kit --filter=@tiptap/extension-text-style
+
+# Build all configured modules
+BUILD_FILTERS=""
+for module in "${TIPTAP_MODULES[@]}"; do
+  PACKAGE_PATH="${module%%:*}"
+  BUILD_FILTERS+="--filter=@tiptap/${PACKAGE_PATH} "
+done
+npx pnpm build $BUILD_FILTERS
 
 # Prepare clean Vite project
 echo "Creating temporary Vite bundle project..."
@@ -32,17 +48,24 @@ npm install vite
 
 # Link local Tiptap packages
 mkdir -p node_modules/@tiptap
-ln -sf "$TIPTAP_DIR/packages/core"        node_modules/@tiptap/core
-ln -sf "$TIPTAP_DIR/packages/starter-kit" node_modules/@tiptap/starter-kit
-ln -sf "$TIPTAP_DIR/packages/extension-text-style" node_modules/@tiptap/extension-text-style
+for module in "${TIPTAP_MODULES[@]}"; do
+  PACKAGE_PATH="${module%%:*}"
+  ln -sf "$TIPTAP_DIR/packages/${PACKAGE_PATH}" "node_modules/@tiptap/${PACKAGE_PATH}"
+done
 
 # Create bundle entry file
-cat > tiptap-bundle.js <<'EOF'
-import {Editor} from '@tiptap/core'
-import StarterKit from '@tiptap/starter-kit'
-import {TextStyle} from '@tiptap/extension-text-style'
+cat > tiptap-bundle.js <<EOF
+$(for module in "${TIPTAP_MODULES[@]}"; do
+  PACKAGE_PATH="${module%%:*}"
+  EXPORT_NAME="${module##*:}"
+  if [ "$EXPORT_NAME" = "$PACKAGE_PATH" ]; then
+    echo "import ${EXPORT_NAME} from '@tiptap/${PACKAGE_PATH}'"
+  else
+    echo "import {${EXPORT_NAME}} from '@tiptap/${PACKAGE_PATH}'"
+  fi
+done)
 
-export { Editor, StarterKit, TextStyle }
+export { $(IFS=','; echo "${TIPTAP_MODULES[*]}" | sed 's/[^:]*://g') }
 EOF
 
 # Create Vite config
