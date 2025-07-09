@@ -77,7 +77,7 @@ export default defineConfig({
     lib: {
       entry: './tiptap-bundle.js',
       name: 'TiptapBundle',
-      fileName: () => 'index.js',
+      fileName: () => 'tiptap.js',
       formats: ['es']
     },
     outDir: "$OUTPUT_DIR",
@@ -93,4 +93,4 @@ EOF
 echo "Bundling Tiptap..."
 npx vite build
 
-echo "✅ Done. Module available at: $OUTPUT_DIR/index.js"
+echo "✅ Done. Module available at: $OUTPUT_DIR/tiptap.js"
