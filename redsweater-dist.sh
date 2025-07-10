@@ -1,6 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
+# Check for dev flag (default: true for development builds)
+DEV_BUILD=true
+if [[ "$*" == *"--production"* ]] || [[ "$*" == *"--prod"* ]]; then
+  DEV_BUILD=false
+fi
+
 # Configure TipTap modules to include
 # Format: "package-path:export-name"
 TIPTAP_MODULES=(
@@ -65,7 +71,7 @@ $(for module in "${TIPTAP_MODULES[@]}"; do
   fi
 done)
 
-export { $(IFS=','; echo "${TIPTAP_MODULES[*]}" | sed 's/[^:]*://g') }
+export { $(for module in "${TIPTAP_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//') }
 EOF
 
 # Create Vite config
@@ -82,6 +88,8 @@ export default defineConfig({
     },
     outDir: "$OUTPUT_DIR",
     emptyOutDir: true,
+    minify: $($DEV_BUILD && echo "false" || echo "true"),
+    sourcemap: $($DEV_BUILD && echo "true" || echo "false"),
     rollupOptions: {
       external: [], // bundle everything
     }
