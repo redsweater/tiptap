@@ -13,6 +13,7 @@ TIPTAP_MODULES=(
   "core:Editor"
   "starter-kit:StarterKit"
   "extension-text-style:TextStyle"
+  "extension-text-align:TextAlign"
 )
 
 # Set absolute paths
@@ -94,7 +95,17 @@ done)
 // Re-export prosemirror utilities from TipTap's dependencies
 import {DOMSerializer} from 'prosemirror-model'
 
+// Named exports
 export { $(for module in "${TIPTAP_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//')$([ ${#TIPTAP_MODULES[@]} -gt 0 ] && echo ", ")DOMSerializer }
+
+// Default export containing all modules
+export default {
+$(for module in "${TIPTAP_MODULES[@]}"; do
+  EXPORT_NAME="${module##*:}"
+  echo "  ${EXPORT_NAME},"
+done)
+  DOMSerializer
+}
 EOF
 
 # Create Vite config
