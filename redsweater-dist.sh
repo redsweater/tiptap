@@ -40,7 +40,10 @@ npx pnpm install
 BUILD_FILTERS=""
 for module in "${TIPTAP_MODULES[@]}"; do
   PACKAGE_PATH="${module%%:*}"
-  BUILD_FILTERS+="--filter=@tiptap/${PACKAGE_PATH} "
+  # Only build tiptap packages, prosemirror packages are dependencies
+  if [[ "$PACKAGE_PATH" != prosemirror-* ]]; then
+    BUILD_FILTERS+="--filter=@tiptap/${PACKAGE_PATH} "
+  fi
 done
 npx pnpm build $BUILD_FILTERS
 
@@ -56,22 +59,42 @@ npm install vite
 mkdir -p node_modules/@tiptap
 for module in "${TIPTAP_MODULES[@]}"; do
   PACKAGE_PATH="${module%%:*}"
-  ln -sf "$TIPTAP_DIR/packages/${PACKAGE_PATH}" "node_modules/@tiptap/${PACKAGE_PATH}"
+  # Only link tiptap packages, prosemirror packages come from npm
+  if [[ "$PACKAGE_PATH" != prosemirror-* ]]; then
+    ln -sf "$TIPTAP_DIR/packages/${PACKAGE_PATH}" "node_modules/@tiptap/${PACKAGE_PATH}"
+  fi
 done
+
+# Link prosemirror packages from TipTap's pnpm node_modules
+PROSEMIRROR_MODEL_DIR=$(find "$TIPTAP_DIR/node_modules/.pnpm" -name "prosemirror-model@*" -type d | head -1)
+if [ -n "$PROSEMIRROR_MODEL_DIR" ]; then
+  ln -sf "$PROSEMIRROR_MODEL_DIR/node_modules/prosemirror-model" node_modules/prosemirror-model
+fi
 
 # Create bundle entry file
 cat > tiptap-bundle.js <<EOF
 $(for module in "${TIPTAP_MODULES[@]}"; do
   PACKAGE_PATH="${module%%:*}"
   EXPORT_NAME="${module##*:}"
-  if [ "$EXPORT_NAME" = "$PACKAGE_PATH" ]; then
-    echo "import ${EXPORT_NAME} from '@tiptap/${PACKAGE_PATH}'"
+  
+  # Handle different package types
+  if [[ "$PACKAGE_PATH" == prosemirror-* ]]; then
+    IMPORT_PATH="$PACKAGE_PATH"
   else
-    echo "import {${EXPORT_NAME}} from '@tiptap/${PACKAGE_PATH}'"
+    IMPORT_PATH="@tiptap/$PACKAGE_PATH"
+  fi
+  
+  if [ "$EXPORT_NAME" = "$PACKAGE_PATH" ]; then
+    echo "import ${EXPORT_NAME} from '${IMPORT_PATH}'"
+  else
+    echo "import {${EXPORT_NAME}} from '${IMPORT_PATH}'"
   fi
 done)
 
-export { $(for module in "${TIPTAP_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//') }
+// Re-export prosemirror utilities from TipTap's dependencies
+import {DOMSerializer} from 'prosemirror-model'
+
+export { $(for module in "${TIPTAP_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//')$([ ${#TIPTAP_MODULES[@]} -gt 0 ] && echo ", ")DOMSerializer }
 EOF
 
 # Create Vite config
