@@ -16,6 +16,11 @@ TIPTAP_MODULES=(
   "extension-text-align:TextAlign"
 )
 
+# Custom plugins/extensions (relative to script directory)
+CUSTOM_MODULES=(
+  "redsweater/extension-redsweater-paste.js:RedSweaterPaste"
+)
+
 # Set absolute paths
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 BUILT_PRODUCTS_DIR="${BUILT_PRODUCTS_DIR:-$SCRIPT_DIR/build}"
@@ -67,24 +72,35 @@ for module in "${TIPTAP_MODULES[@]}"; do
 done
 
 # Link prosemirror packages from TipTap's pnpm node_modules
-PROSEMIRROR_MODEL_DIR=$(find "$TIPTAP_DIR/node_modules/.pnpm" -name "prosemirror-model@*" -type d | head -1)
-if [ -n "$PROSEMIRROR_MODEL_DIR" ]; then
-  ln -sf "$PROSEMIRROR_MODEL_DIR/node_modules/prosemirror-model" node_modules/prosemirror-model
-fi
+PROSEMIRROR_PACKAGES=("prosemirror-model" "prosemirror-state")
+for pkg in "${PROSEMIRROR_PACKAGES[@]}"; do
+  PROSEMIRROR_DIR=$(find "$TIPTAP_DIR/node_modules/.pnpm" -name "${pkg}@*" -type d | head -1)
+  if [ -n "$PROSEMIRROR_DIR" ]; then
+    ln -sf "$PROSEMIRROR_DIR/node_modules/$pkg" "node_modules/$pkg"
+  fi
+done
+
+# Copy custom modules
+for module in "${CUSTOM_MODULES[@]}"; do
+  FILE_PATH="${module%%:*}"
+  # Create directory structure if needed
+  mkdir -p "$(dirname "$FILE_PATH")"
+  cp "$SCRIPT_DIR/$FILE_PATH" "$FILE_PATH"
+done
 
 # Create bundle entry file
 cat > tiptap-bundle.js <<EOF
 $(for module in "${TIPTAP_MODULES[@]}"; do
   PACKAGE_PATH="${module%%:*}"
   EXPORT_NAME="${module##*:}"
-  
+
   # Handle different package types
   if [[ "$PACKAGE_PATH" == prosemirror-* ]]; then
     IMPORT_PATH="$PACKAGE_PATH"
   else
     IMPORT_PATH="@tiptap/$PACKAGE_PATH"
   fi
-  
+
   if [ "$EXPORT_NAME" = "$PACKAGE_PATH" ]; then
     echo "import ${EXPORT_NAME} from '${IMPORT_PATH}'"
   else
@@ -95,12 +111,23 @@ done)
 // Re-export prosemirror utilities from TipTap's dependencies
 import {DOMSerializer} from 'prosemirror-model'
 
+// Custom modules
+$(for module in "${CUSTOM_MODULES[@]}"; do
+  FILE_PATH="${module%%:*}"
+  EXPORT_NAME="${module##*:}"
+  echo "import {${EXPORT_NAME}} from './${FILE_PATH}'"
+done)
+
 // Named exports
-export { $(for module in "${TIPTAP_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//')$([ ${#TIPTAP_MODULES[@]} -gt 0 ] && echo ", ")DOMSerializer }
+export { $(for module in "${TIPTAP_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//')$([ ${#TIPTAP_MODULES[@]} -gt 0 ] && echo ", ")$(for module in "${CUSTOM_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//')$([ ${#CUSTOM_MODULES[@]} -gt 0 ] && echo ", ")DOMSerializer }
 
 // Default export containing all modules
 export default {
 $(for module in "${TIPTAP_MODULES[@]}"; do
+  EXPORT_NAME="${module##*:}"
+  echo "  ${EXPORT_NAME},"
+done)
+$(for module in "${CUSTOM_MODULES[@]}"; do
   EXPORT_NAME="${module##*:}"
   echo "  ${EXPORT_NAME},"
 done)
