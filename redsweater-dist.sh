@@ -10,10 +10,12 @@ fi
 # Configure TipTap modules to include
 # Format: "package-path:export-name"
 TIPTAP_MODULES=(
-  "core:Editor"
-  "starter-kit:StarterKit"
-  "extension-text-style:TextStyle"
-  "extension-text-align:TextAlign"
+    "core:Editor"
+    "starter-kit:StarterKit"
+    "extension-text-style:TextStyle"
+    "extension-text-align:TextAlign"
+    "extension-link:Link"
+    "extensions:*"  # For the utility extensions
 )
 
 # Custom plugins/extensions (relative to script directory)
@@ -101,7 +103,9 @@ $(for module in "${TIPTAP_MODULES[@]}"; do
     IMPORT_PATH="@tiptap/$PACKAGE_PATH"
   fi
 
-  if [ "$EXPORT_NAME" = "$PACKAGE_PATH" ]; then
+  if [ "$EXPORT_NAME" = "*" ]; then
+    echo "import * as ExportedExtensions from '${IMPORT_PATH}'"
+  elif [ "$EXPORT_NAME" = "$PACKAGE_PATH" ]; then
     echo "import ${EXPORT_NAME} from '${IMPORT_PATH}'"
   else
     echo "import {${EXPORT_NAME}} from '${IMPORT_PATH}'"
@@ -119,13 +123,17 @@ $(for module in "${CUSTOM_MODULES[@]}"; do
 done)
 
 // Named exports
-export { $(for module in "${TIPTAP_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//')$([ ${#TIPTAP_MODULES[@]} -gt 0 ] && echo ", ")$(for module in "${CUSTOM_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//')$([ ${#CUSTOM_MODULES[@]} -gt 0 ] && echo ", ")DOMSerializer }
+export { $(for module in "${TIPTAP_MODULES[@]}"; do EXPORT_NAME="${module##*:}"; if [ "$EXPORT_NAME" != "*" ]; then echo -n "${EXPORT_NAME}, "; fi; done | sed 's/, $//')$([ ${#TIPTAP_MODULES[@]} -gt 0 ] && echo ", ")$(for module in "${CUSTOM_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//')$([ ${#CUSTOM_MODULES[@]} -gt 0 ] && echo ", ")ExportedExtensions, DOMSerializer }
 
 // Default export containing all modules
 export default {
 $(for module in "${TIPTAP_MODULES[@]}"; do
   EXPORT_NAME="${module##*:}"
-  echo "  ${EXPORT_NAME},"
+  if [ "$EXPORT_NAME" = "*" ]; then
+    echo "  ExportedExtensions,"
+  else
+    echo "  ${EXPORT_NAME},"
+  fi
 done)
 $(for module in "${CUSTOM_MODULES[@]}"; do
   EXPORT_NAME="${module##*:}"
