@@ -122,8 +122,22 @@ $(for module in "${CUSTOM_MODULES[@]}"; do
   echo "import {${EXPORT_NAME}} from './${FILE_PATH}'"
 done)
 
-// Named exports
-export { $(for module in "${TIPTAP_MODULES[@]}"; do EXPORT_NAME="${module##*:}"; if [ "$EXPORT_NAME" != "*" ]; then echo -n "${EXPORT_NAME}, "; fi; done | sed 's/, $//')$([ ${#TIPTAP_MODULES[@]} -gt 0 ] && echo ", ")$(for module in "${CUSTOM_MODULES[@]}"; do echo -n "${module##*:}, "; done | sed 's/, $//')$([ ${#CUSTOM_MODULES[@]} -gt 0 ] && echo ", ")ExportedExtensions, DOMSerializer }
+// Named exports  
+$(
+EXPORTS=""
+for module in "${TIPTAP_MODULES[@]}"; do
+  EXPORT_NAME="${module##*:}"
+  if [ "$EXPORT_NAME" != "*" ]; then
+    EXPORTS="$EXPORTS$EXPORT_NAME, "
+  fi
+done
+for module in "${CUSTOM_MODULES[@]}"; do
+  EXPORT_NAME="${module##*:}"
+  EXPORTS="$EXPORTS$EXPORT_NAME, "
+done
+EXPORTS="${EXPORTS}ExportedExtensions, DOMSerializer"
+echo "export { $EXPORTS }"
+)
 
 // Default export containing all modules
 export default {
